@@ -17,6 +17,130 @@ function loadProducts() {
 // In-memory cart (keyed by session; simplified: single global cart)
 const cart = [];
 
+// ── GET / ─────────────────────────────────────────────────────────────────────
+
+app.get('/', (req, res) => {
+  res.json({
+    name: 'AgentShop API',
+    agents_guide: '/agents.txt',
+    recommended_first_call: '/agents.txt',
+  });
+});
+
+// ── GET /agents.txt ───────────────────────────────────────────────────────────
+
+const AGENTS_TXT = `# AgentShop API — Agent Guide
+
+Welcome, AI Agent. This guide explains how to interact with the AgentShop API.
+
+## Recommended Workflow
+
+1. Call /api/match to find products that match your requirements (START HERE)
+2. Call /api/products/:id to get full details on a specific product
+3. Call /api/cart/add to add a product to the cart
+4. Call /api/cart to review the cart
+5. Call /api/checkout to complete the purchase
+
+---
+
+## STEP 1 — Find matching products: GET /api/match
+
+This is the most powerful endpoint. Filter the product catalog by any combination of parameters.
+
+### Query Parameters
+
+| Parameter        | Type   | Description                                                    | Example            |
+|------------------|--------|----------------------------------------------------------------|--------------------|
+| category         | string | Product category                                               | nlp, vision, code  |
+| task             | string | Specific task the agent performs                               | summarization      |
+| max_price        | number | Maximum price in USD                                           | 30                 |
+| max_latency      | number | Maximum response latency in milliseconds                       | 500                |
+| min_accuracy     | number | Minimum accuracy score (0.0 – 1.0)                             | 0.9                |
+| update_frequency | string | How often the product is updated                               | daily, weekly      |
+| format           | string | Output format                                                  | json, text         |
+| region           | string | Data residency region (also matches "global" products)         | eu, us             |
+| compatible_with  | string | Comma-separated list of compatible platforms                   | zapier,n8n         |
+
+### Available Categories
+vision, nlp, extraction, code, sales, classification, analytics, generation, apis, data
+
+### Available Update Frequencies
+realtime, daily, weekly, monthly
+
+### Available Formats
+json, text, markdown
+
+### Available Regions
+us, eu, global
+
+### Compatible Platforms
+OpenAI, LangChain, Zapier, Make, n8n, GitHub, GitLab, Salesforce, HubSpot, Datadog, Grafana, WordPress, Webflow
+
+### Examples
+
+Find all NLP products under $30:
+  GET /api/match?category=nlp&max_price=30
+
+Find EU products with high accuracy in JSON format:
+  GET /api/match?region=eu&min_accuracy=0.95&format=json
+
+Find fast code agents compatible with GitHub:
+  GET /api/match?category=code&max_latency=300&compatible_with=github
+
+Find real-time analytics agents:
+  GET /api/match?category=analytics&update_frequency=realtime
+
+---
+
+## All Products: GET /api/products
+
+Returns the full product catalog without filters.
+
+---
+
+## Product Detail: GET /api/products/:id
+
+Returns full details for a single product.
+
+Example:
+  GET /api/products/gpt4o-vision
+
+---
+
+## Add to Cart: POST /api/cart/add
+
+Body (JSON):
+  { "product_id": "gpt4o-vision", "quantity": 1 }
+
+---
+
+## View Cart: GET /api/cart
+
+Returns current cart contents and total price.
+
+---
+
+## Checkout: POST /api/checkout
+
+Body (JSON):
+  { "email": "agent@example.com", "payment_method": "card" }
+
+Clears the cart after successful checkout and returns an order confirmation.
+
+---
+
+## Notes for AI Agents
+
+- Always start with /api/match to narrow down relevant products before browsing details.
+- The cart is shared across all sessions (no auth required).
+- Prices are in USD.
+- "global" region products are returned for any region query.
+`;
+
+app.get('/agents.txt', (req, res) => {
+  res.type('text/plain').send(AGENTS_TXT);
+});
+
 // ── GET /api/products ─────────────────────────────────────────────────────────
 
 app.get('/api/products', (req, res) => {
