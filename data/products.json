@@ -222,5 +222,43 @@
     "compatible_with": ["zapier", "make", "langchain", "n8n"],
     "rating": 4.5,
     "reviews": 219
+  },
+  {
+    "id": "destatis-ecommerce-index",
+    "name": "German E-Commerce Revenue Index",
+    "description": "Monthly retail turnover index for online and mail-order trade in Germany (WZ08-4791, Index 2015=100). Covers nominal and real (inflation-adjusted) values from 1994 to present. Official statistics from Statistisches Bundesamt – delivered live from DBnomics on purchase.",
+    "price": 9.99,
+    "category": "data",
+    "task": "ecommerce_index",
+    "latency_ms": 600,
+    "accuracy": 1.0,
+    "update_frequency": "monthly",
+    "format": "json",
+    "region": "de",
+    "compatible_with": ["langchain", "n8n", "zapier", "make"],
+    "rating": 4.9,
+    "reviews": 14,
+    "source": "© Statistisches Bundesamt (Destatis), Datenlizenz Deutschland 2.0",
+    "dbnomics_dataset": "DESTATIS/45212BM002",
+    "wz08_code": "WZ08-4791"
+  },
+  {
+    "id": "destatis-cpi-categories",
+    "name": "German Consumer Price Index by Category",
+    "description": "Monthly consumer price index for Germany (Index 2020=100) broken down by COICOP spending categories: food, clothing, footwear, furniture, household appliances, telecommunications, audio/video/IT, books, and more. Official statistics from Statistisches Bundesamt – delivered live from DBnomics on purchase.",
+    "price": 7.99,
+    "category": "data",
+    "task": "price_index",
+    "latency_ms": 600,
+    "accuracy": 1.0,
+    "update_frequency": "monthly",
+    "format": "json",
+    "region": "de",
+    "compatible_with": ["langchain", "n8n", "zapier", "make"],
+    "rating": 4.8,
+    "reviews": 9,
+    "source": "© Statistisches Bundesamt (Destatis), Datenlizenz Deutschland 2.0",
+    "dbnomics_dataset": "DESTATIS/61111BM003",
+    "coicop_categories": ["CC13-011","CC13-031","CC13-032","CC13-051","CC13-053","CC13-082","CC13-091","CC13-095"]
   }
 ]

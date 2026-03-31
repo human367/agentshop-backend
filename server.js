@@ -67,13 +67,87 @@ const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,255}$/;
 const VALID_CATEGORIES = new Set(['vision','nlp','extraction','code','sales','classification','analytics','generation','apis','data']);
 const VALID_UPDATE_FREQUENCIES = new Set(['realtime','daily','weekly','monthly']);
 const VALID_FORMATS = new Set(['json','text','markdown']);
-const VALID_REGIONS = new Set(['us','eu','global']);
+const VALID_REGIONS = new Set(['us','eu','de','global']);
 
 // ── Data ─────────────────────────────────────────────────────────────────────
 
 function loadProducts() {
   const filePath = path.join(__dirname, 'data', 'products.json');
   return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+}
+
+// ── Destatis Live-Data via DBnomics ───────────────────────────────────────────
+
+const DBNOMICS_BASE = 'https://api.db.nomics.world/v22';
+
+const DESTATIS_LIVE_PRODUCTS = {
+  'destatis-ecommerce-index': {
+    url: `${DBNOMICS_BASE}/series/DESTATIS/45212BM002?observations=true&limit=200`,
+    transform(docs) {
+      const WANTED_WZ = new Set(['WZ08-4791', 'WZ08-47911', 'WZ08-47919']);
+      return docs
+        .filter(s => WANTED_WZ.has(s.dimensions?.WZ08E6))
+        .map(s => ({
+          series_code:  s.series_code,
+          series_name:  s.series_name,
+          price_type:   s.dimensions?.WERTE4 === 'NOMINAL' ? 'nominal' : 'real_index_2015_100',
+          wz08_code:    s.dimensions?.WZ08E6,
+          unit:         'Index (2015 = 100)',
+          observations: buildObs(s),
+        }));
+    },
+  },
+  'destatis-cpi-categories': {
+    url: `${DBNOMICS_BASE}/series/DESTATIS/61111BM003?observations=true&limit=100`,
+    transform(docs) {
+      const CATEGORY_LABELS = {
+        'CC13-011': 'Food',
+        'CC13-031': 'Clothing',
+        'CC13-032': 'Footwear',
+        'CC13-051': 'Furniture & lighting',
+        'CC13-053': 'Household appliances',
+        'CC13-082': 'Telecommunications',
+        'CC13-091': 'Audio, video & IT equipment',
+        'CC13-095': 'Books & stationery',
+      };
+      return docs.map(s => ({
+        series_code:    s.series_code,
+        series_name:    s.series_name,
+        coicop_code:    s.dimensions?.CC13A3,
+        category_label: CATEGORY_LABELS[s.dimensions?.CC13A3] ?? s.dimensions?.CC13A3,
+        unit:           'Index (2020 = 100)',
+        observations:   buildObs(s),
+      }));
+    },
+  },
+};
+
+function buildObs(series) {
+  const periods = series.period ?? [];
+  const values  = series.value  ?? [];
+  return periods.map((p, i) => ({ period: p, value: values[i] ?? null }));
+}
+
+async function fetchDestatisLiveData(productId) {
+  const config = DESTATIS_LIVE_PRODUCTS[productId];
+  if (!config) return null;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 12000);
+  try {
+    const resp = await fetch(config.url, { signal: controller.signal });
+    if (!resp.ok) throw new Error(`DBnomics HTTP ${resp.status}`);
+    const json = await resp.json();
+    const docs  = json?.series?.docs ?? [];
+    return {
+      source:       '© Statistisches Bundesamt (Destatis), Datenlizenz Deutschland 2.0',
+      dataset:      json?.series?.docs?.[0]?.dataset_code ?? productId,
+      retrieved_at: new Date().toISOString(),
+      series:       config.transform(docs),
+    };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 // In-memory cart (keyed by session; simplified: single global cart)
@@ -212,7 +286,7 @@ app.get('/api/products', (req, res) => {
 
 // ── GET /api/products/:id ─────────────────────────────────────────────────────
 
-app.get('/api/products/:id', (req, res) => {
+app.get('/api/products/:id', async (req, res) => {
   // Validate id format – only alphanumeric and hyphens allowed
   if (!/^[a-zA-Z0-9_-]{1,64}$/.test(req.params.id)) {
     return res.status(400).json({ success: false, error: 'Invalid product id format.' });
@@ -222,6 +296,28 @@ app.get('/api/products/:id', (req, res) => {
   if (!product) {
     return res.status(404).json({ success: false, error: 'Product not found.' });
   }
+
+  // For live-data products: include a small preview (last 6 observations per series)
+  if (DESTATIS_LIVE_PRODUCTS[product.id]) {
+    try {
+      const liveData = await fetchDestatisLiveData(product.id);
+      const preview = liveData
+        ? {
+            ...liveData,
+            series: liveData.series.map(s => ({
+              ...s,
+              observations: s.observations.slice(-6),
+              note: 'Preview – last 6 months. Full dataset delivered on purchase.',
+            })),
+          }
+        : null;
+      return res.json({ success: true, data: product, data_preview: preview });
+    } catch {
+      // DBnomics unreachable – return product without preview
+      return res.json({ success: true, data: product, data_preview: null });
+    }
+  }
+
   res.json({ success: true, data: product });
 });
 
@@ -366,7 +462,7 @@ app.get('/api/cart', (req, res) => {
 // ── POST /api/checkout ────────────────────────────────────────────────────────
 // Body: { email: string, payment_method?: string }
 
-app.post('/api/checkout', (req, res) => {
+app.post('/api/checkout', async (req, res) => {
   if (cart.length === 0) {
     return res.status(400).json({ success: false, error: 'Cart is empty.' });
   }
@@ -390,20 +486,44 @@ app.post('/api/checkout', (req, res) => {
   }
 
   const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const purchasedItems = [...cart];
+
+  // Clear cart before async work so parallel checkouts don't double-clear
+  cart.length = 0;
+
+  // Fetch live data for every Destatis product in the order
+  const liveDataResults = await Promise.all(
+    purchasedItems
+      .filter(item => DESTATIS_LIVE_PRODUCTS[item.product_id])
+      .map(async item => {
+        try {
+          const data = await fetchDestatisLiveData(item.product_id);
+          return { product_id: item.product_id, data };
+        } catch (e) {
+          console.error('Destatis live-data fetch failed for', item.product_id, '–', e?.message);
+          return { product_id: item.product_id, data: null, error: 'Live data temporarily unavailable.' };
+        }
+      })
+  );
+
+  const live_data = liveDataResults.length > 0 ? liveDataResults : undefined;
+
   const order = {
     order_id: `ord_${Date.now()}`,
     email,
     payment_method: method,
-    items: [...cart],
+    items: purchasedItems,
     total: Math.round(total * 100) / 100,
     status: 'confirmed',
     created_at: new Date().toISOString(),
   };
 
-  // Clear cart after checkout
-  cart.length = 0;
-
-  res.json({ success: true, message: 'Order placed successfully.', order });
+  res.json({
+    success: true,
+    message: 'Order placed successfully.',
+    order,
+    ...(live_data && { live_data }),
+  });
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────
