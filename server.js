@@ -1,11 +1,73 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const cors = require('cors');
+const rateLimit = require('express-rate-limit');
+const helmet = require('helmet');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(express.json());
+// ── Security Middleware ───────────────────────────────────────────────────────
+
+// Security headers (X-Frame-Options, X-Content-Type-Options, CSP, etc.)
+app.use(helmet());
+
+// CORS – restrict to allowed origins via ALLOWED_ORIGIN env var
+// Set ALLOWED_ORIGIN=https://yourfrontend.com in production
+// Multiple origins: ALLOWED_ORIGIN=https://a.com,https://b.com
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || '*';
+const corsOrigin = ALLOWED_ORIGIN === '*' ? '*' : ALLOWED_ORIGIN.split(',').map(o => o.trim());
+app.use(cors({
+  origin: corsOrigin,
+  methods: ['GET', 'POST'],
+  allowedHeaders: ['Content-Type'],
+}));
+
+// Rate limiting – 100 requests per 15 minutes per IP
+app.use(rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: 'Too many requests – please try again later.' },
+}));
+
+// Body parsing with 10 KB size limit to prevent large payload attacks
+app.use(express.json({ limit: '10kb' }));
+
+// ── Input Validation Helpers ─────────────────────────────────────────────────
+
+function parseNonNegativeFloat(val, name, max) {
+  const n = parseFloat(val);
+  if (!Number.isFinite(n) || n < 0) {
+    throw new Error(`${name} must be a non-negative number.`);
+  }
+  if (max !== undefined && n > max) {
+    throw new Error(`${name} must not exceed ${max}.`);
+  }
+  return n;
+}
+
+function parsePositiveInt(val, name, max) {
+  if (!/^\d+$/.test(String(val).trim())) {
+    throw new Error(`${name} must be a non-negative integer.`);
+  }
+  const n = parseInt(val, 10);
+  if (max !== undefined && n > max) {
+    throw new Error(`${name} must not exceed ${max}.`);
+  }
+  return n;
+}
+
+// Simple email sanity check – no external library needed
+const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,255}$/;
+
+// Allowed enum values for string filter params
+const VALID_CATEGORIES = new Set(['vision','nlp','extraction','code','sales','classification','analytics','generation','apis','data']);
+const VALID_UPDATE_FREQUENCIES = new Set(['realtime','daily','weekly','monthly']);
+const VALID_FORMATS = new Set(['json','text','markdown']);
+const VALID_REGIONS = new Set(['us','eu','global']);
 
 // ── Data ─────────────────────────────────────────────────────────────────────
 
@@ -151,10 +213,14 @@ app.get('/api/products', (req, res) => {
 // ── GET /api/products/:id ─────────────────────────────────────────────────────
 
 app.get('/api/products/:id', (req, res) => {
+  // Validate id format – only alphanumeric and hyphens allowed
+  if (!/^[a-zA-Z0-9_-]{1,64}$/.test(req.params.id)) {
+    return res.status(400).json({ success: false, error: 'Invalid product id format.' });
+  }
   const products = loadProducts();
   const product = products.find(p => p.id === req.params.id);
   if (!product) {
-    return res.status(404).json({ success: false, error: `Product '${req.params.id}' not found.` });
+    return res.status(404).json({ success: false, error: 'Product not found.' });
   }
   res.json({ success: true, data: product });
 });
@@ -177,35 +243,72 @@ app.get('/api/match', (req, res) => {
     compatible_with,
   } = req.query;
 
-  if (category) {
-    products = products.filter(p => p.category === category);
-  }
-  if (task) {
-    products = products.filter(p => p.task === task);
-  }
-  if (max_price !== undefined) {
-    products = products.filter(p => p.price <= parseFloat(max_price));
-  }
-  if (max_latency !== undefined) {
-    products = products.filter(p => p.latency_ms <= parseInt(max_latency));
-  }
-  if (min_accuracy !== undefined) {
-    products = products.filter(p => p.accuracy >= parseFloat(min_accuracy));
-  }
-  if (update_frequency) {
-    products = products.filter(p => p.update_frequency === update_frequency);
-  }
-  if (format) {
-    products = products.filter(p => p.format === format);
-  }
-  if (region) {
-    products = products.filter(p => p.region === region || p.region === 'global');
-  }
-  if (compatible_with) {
-    const tools = compatible_with.split(',').map(t => t.trim().toLowerCase());
-    products = products.filter(p =>
-      tools.some(tool => p.compatible_with.map(c => c.toLowerCase()).includes(tool))
-    );
+  try {
+    if (category !== undefined) {
+      if (!VALID_CATEGORIES.has(category)) {
+        return res.status(400).json({ success: false, error: `Invalid category. Allowed: ${[...VALID_CATEGORIES].join(', ')}.` });
+      }
+      products = products.filter(p => p.category === category);
+    }
+
+    if (task !== undefined) {
+      if (typeof task !== 'string' || task.length > 100) {
+        return res.status(400).json({ success: false, error: 'task must be a string up to 100 characters.' });
+      }
+      products = products.filter(p => p.task === task);
+    }
+
+    if (max_price !== undefined) {
+      const price = parseNonNegativeFloat(max_price, 'max_price', 1_000_000);
+      products = products.filter(p => p.price <= price);
+    }
+
+    if (max_latency !== undefined) {
+      const latency = parsePositiveInt(max_latency, 'max_latency', 600_000);
+      products = products.filter(p => p.latency_ms <= latency);
+    }
+
+    if (min_accuracy !== undefined) {
+      const accuracy = parseNonNegativeFloat(min_accuracy, 'min_accuracy', 1);
+      products = products.filter(p => p.accuracy >= accuracy);
+    }
+
+    if (update_frequency !== undefined) {
+      if (!VALID_UPDATE_FREQUENCIES.has(update_frequency)) {
+        return res.status(400).json({ success: false, error: `Invalid update_frequency. Allowed: ${[...VALID_UPDATE_FREQUENCIES].join(', ')}.` });
+      }
+      products = products.filter(p => p.update_frequency === update_frequency);
+    }
+
+    if (format !== undefined) {
+      if (!VALID_FORMATS.has(format)) {
+        return res.status(400).json({ success: false, error: `Invalid format. Allowed: ${[...VALID_FORMATS].join(', ')}.` });
+      }
+      products = products.filter(p => p.format === format);
+    }
+
+    if (region !== undefined) {
+      if (!VALID_REGIONS.has(region)) {
+        return res.status(400).json({ success: false, error: `Invalid region. Allowed: ${[...VALID_REGIONS].join(', ')}.` });
+      }
+      products = products.filter(p => p.region === region || p.region === 'global');
+    }
+
+    if (compatible_with !== undefined) {
+      if (typeof compatible_with !== 'string' || compatible_with.length > 200) {
+        return res.status(400).json({ success: false, error: 'compatible_with must be a string up to 200 characters.' });
+      }
+      const tools = compatible_with.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
+      if (tools.length === 0 || tools.length > 20) {
+        return res.status(400).json({ success: false, error: 'compatible_with must contain 1–20 comma-separated values.' });
+      }
+      products = products.filter(p =>
+        Array.isArray(p.compatible_with) &&
+        tools.some(tool => p.compatible_with.map(c => c.toLowerCase()).includes(tool))
+      );
+    }
+  } catch (err) {
+    return res.status(400).json({ success: false, error: err.message });
   }
 
   res.json({ success: true, count: products.length, data: products });
@@ -216,21 +319,33 @@ app.get('/api/match', (req, res) => {
 
 app.post('/api/cart/add', (req, res) => {
   const { product_id, quantity = 1 } = req.body;
-  if (!product_id) {
+
+  if (!product_id || typeof product_id !== 'string') {
     return res.status(400).json({ success: false, error: 'product_id is required.' });
+  }
+  if (!/^[a-zA-Z0-9_-]{1,64}$/.test(product_id)) {
+    return res.status(400).json({ success: false, error: 'Invalid product_id format.' });
+  }
+
+  let qty;
+  try {
+    qty = parsePositiveInt(String(quantity), 'quantity', 100);
+    if (qty < 1) throw new Error('quantity must be at least 1.');
+  } catch (err) {
+    return res.status(400).json({ success: false, error: err.message });
   }
 
   const products = loadProducts();
   const product = products.find(p => p.id === product_id);
   if (!product) {
-    return res.status(404).json({ success: false, error: `Product '${product_id}' not found.` });
+    return res.status(404).json({ success: false, error: 'Product not found.' });
   }
 
   const existing = cart.find(item => item.product_id === product_id);
   if (existing) {
-    existing.quantity += quantity;
+    existing.quantity += qty;
   } else {
-    cart.push({ product_id, name: product.name, price: product.price, quantity });
+    cart.push({ product_id, name: product.name, price: product.price, quantity: qty });
   }
 
   res.json({ success: true, message: 'Product added to cart.', cart });
@@ -257,15 +372,28 @@ app.post('/api/checkout', (req, res) => {
   }
 
   const { email, payment_method = 'card' } = req.body;
-  if (!email) {
+
+  if (!email || typeof email !== 'string') {
     return res.status(400).json({ success: false, error: 'email is required.' });
+  }
+  if (!EMAIL_RE.test(email)) {
+    return res.status(400).json({ success: false, error: 'Invalid email address.' });
+  }
+  if (email.length > 320) {
+    return res.status(400).json({ success: false, error: 'email too long.' });
+  }
+
+  const VALID_PAYMENT_METHODS = new Set(['card', 'paypal', 'crypto']);
+  const method = String(payment_method);
+  if (!VALID_PAYMENT_METHODS.has(method)) {
+    return res.status(400).json({ success: false, error: `Invalid payment_method. Allowed: ${[...VALID_PAYMENT_METHODS].join(', ')}.` });
   }
 
   const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const order = {
     order_id: `ord_${Date.now()}`,
     email,
-    payment_method,
+    payment_method: method,
     items: [...cart],
     total: Math.round(total * 100) / 100,
     status: 'confirmed',
