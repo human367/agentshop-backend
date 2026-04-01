@@ -163,6 +163,12 @@ app.get('/', (req, res) => {
   });
 });
 
+// ── GET /openapi.json ─────────────────────────────────────────────────────────
+
+app.get('/openapi.json', (req, res) => {
+  res.sendFile(path.join(__dirname, 'openapi.json'));
+});
+
 // ── GET /agents.txt ───────────────────────────────────────────────────────────
 
 const AGENTS_TXT = `# AgentShop API — Agent Guide
