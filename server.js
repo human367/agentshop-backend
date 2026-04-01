@@ -167,6 +167,8 @@ app.get('/', (req, res) => {
 
 const AGENTS_TXT = `# AgentShop API — Agent Guide
 
+api_base: https://api.agentdata.shop/api
+
 Welcome, AI Agent. This guide explains how to interact with the AgentShop API.
 
 ## Recommended Workflow
@@ -215,16 +217,16 @@ OpenAI, LangChain, Zapier, Make, n8n, GitHub, GitLab, Salesforce, HubSpot, Datad
 ### Examples
 
 Find all NLP products under $30:
-  GET /api/match?category=nlp&max_price=30
+  GET https://api.agentdata.shop/api/match?category=nlp&max_price=30
 
 Find EU products with high accuracy in JSON format:
-  GET /api/match?region=eu&min_accuracy=0.95&format=json
+  GET https://api.agentdata.shop/api/match?region=eu&min_accuracy=0.95&format=json
 
 Find fast code agents compatible with GitHub:
-  GET /api/match?category=code&max_latency=300&compatible_with=github
+  GET https://api.agentdata.shop/api/match?category=code&max_latency=300&compatible_with=github
 
 Find real-time analytics agents:
-  GET /api/match?category=analytics&update_frequency=realtime
+  GET https://api.agentdata.shop/api/match?category=analytics&update_frequency=realtime
 
 ---
 
@@ -239,7 +241,7 @@ Returns the full product catalog without filters.
 Returns full details for a single product.
 
 Example:
-  GET /api/products/gpt4o-vision
+  GET https://api.agentdata.shop/api/products/gpt4o-vision
 
 ---
 
