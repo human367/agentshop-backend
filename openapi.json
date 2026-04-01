@@ -1,0 +1,788 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "AgentData API",
+    "version": "1.0.0",
+    "description": "AgentData - The test environment for E-Commerce AI Agents. Search, compare and purchase APIs, datasets and agent templates autonomously.",
+    "contact": {
+      "email": "hello@agentdata.shop"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.agentdata.shop",
+      "description": "Production"
+    }
+  ],
+  "paths": {
+    "/agents.txt": {
+      "get": {
+        "summary": "Agent guide",
+        "description": "Plain-text onboarding guide for AI agents. Start here to understand the recommended workflow and all available endpoints.",
+        "operationId": "getAgentsTxt",
+        "responses": {
+          "200": {
+            "description": "Agent guide as plain text",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/products": {
+      "get": {
+        "summary": "List all products",
+        "description": "Returns the full product catalog without any filters.",
+        "operationId": "listProducts",
+        "responses": {
+          "200": {
+            "description": "Full product list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductListResponse"
+                },
+                "example": {
+                  "success": true,
+                  "count": 14,
+                  "data": [
+                    {
+                      "id": "prod_001",
+                      "name": "GPT-4o Vision Analyzer",
+                      "description": "Multimodal AI agent for image and document analysis.",
+                      "price": 49.99,
+                      "category": "vision",
+                      "task": "image_analysis",
+                      "latency_ms": 800,
+                      "accuracy": 0.95,
+                      "update_frequency": "weekly",
+                      "format": "json",
+                      "region": "us",
+                      "compatible_with": ["openai", "langchain", "n8n"],
+                      "rating": 4.8,
+                      "reviews": 312
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/products/{id}": {
+      "get": {
+        "summary": "Get product by ID",
+        "description": "Returns full details for a single product. For live-data products (e.g. Destatis datasets), includes a preview of the last 6 observations.",
+        "operationId": "getProduct",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Product ID (alphanumeric, hyphens and underscores, max 64 chars)",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+              "example": "destatis-ecommerce-index"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Product detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductDetailResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid product ID format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Product not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/match": {
+      "get": {
+        "summary": "Search products by constraints",
+        "description": "Filter the product catalog by any combination of parameters. This is the recommended starting point for agents. All parameters are optional and combinable.",
+        "operationId": "matchProducts",
+        "parameters": [
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "description": "Product category",
+            "schema": {
+              "type": "string",
+              "enum": ["vision", "nlp", "extraction", "code", "sales", "classification", "analytics", "generation", "apis", "data"]
+            }
+          },
+          {
+            "name": "task",
+            "in": "query",
+            "required": false,
+            "description": "Specific task the product performs (max 100 characters)",
+            "schema": {
+              "type": "string",
+              "maxLength": 100,
+              "example": "summarization"
+            }
+          },
+          {
+            "name": "max_price",
+            "in": "query",
+            "required": false,
+            "description": "Maximum price in USD",
+            "schema": {
+              "type": "number",
+              "minimum": 0,
+              "example": 30
+            }
+          },
+          {
+            "name": "max_latency",
+            "in": "query",
+            "required": false,
+            "description": "Maximum response latency in milliseconds",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 600000,
+              "example": 500
+            }
+          },
+          {
+            "name": "min_accuracy",
+            "in": "query",
+            "required": false,
+            "description": "Minimum accuracy score (0.0 – 1.0)",
+            "schema": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "example": 0.9
+            }
+          },
+          {
+            "name": "update_frequency",
+            "in": "query",
+            "required": false,
+            "description": "How often the product data is updated",
+            "schema": {
+              "type": "string",
+              "enum": ["realtime", "daily", "weekly", "monthly"]
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "description": "Output format of the product",
+            "schema": {
+              "type": "string",
+              "enum": ["json", "text", "markdown"]
+            }
+          },
+          {
+            "name": "region",
+            "in": "query",
+            "required": false,
+            "description": "Data residency region. Products with region 'global' are always included.",
+            "schema": {
+              "type": "string",
+              "enum": ["us", "eu", "de", "global"]
+            }
+          },
+          {
+            "name": "compatible_with",
+            "in": "query",
+            "required": false,
+            "description": "Comma-separated list of required compatible platforms (1–20 values)",
+            "schema": {
+              "type": "string",
+              "maxLength": 200,
+              "example": "zapier,n8n"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Filtered product list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductListResponse"
+                },
+                "example": {
+                  "success": true,
+                  "count": 2,
+                  "data": [
+                    {
+                      "id": "prod_002",
+                      "name": "FastSummarizer Pro",
+                      "price": 19.99,
+                      "category": "nlp"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cart/add": {
+      "post": {
+        "summary": "Add product to cart",
+        "description": "Adds a product to the shared global cart. The cart persists in-memory across all sessions (no authentication required).",
+        "operationId": "addToCart",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CartAddRequest"
+              },
+              "example": {
+                "product_id": "destatis-ecommerce-index",
+                "quantity": 1
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Product added to cart",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CartAddResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or invalid fields",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Product not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cart": {
+      "get": {
+        "summary": "View cart",
+        "description": "Returns the current cart contents, item count, and total price in USD.",
+        "operationId": "getCart",
+        "responses": {
+          "200": {
+            "description": "Current cart state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CartResponse"
+                },
+                "example": {
+                  "success": true,
+                  "items": [
+                    {
+                      "product_id": "destatis-ecommerce-index",
+                      "name": "German E-Commerce Revenue Index",
+                      "price": 9.99,
+                      "quantity": 1
+                    }
+                  ],
+                  "item_count": 1,
+                  "total": 9.99
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/checkout": {
+      "post": {
+        "summary": "Checkout",
+        "description": "Completes the purchase. Clears the cart and returns an order confirmation. For live-data products (Destatis datasets), the full dataset is included in the response.",
+        "operationId": "checkout",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckoutRequest"
+              },
+              "example": {
+                "email": "agent@example.com",
+                "payment_method": "card"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Order confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckoutResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Cart empty, invalid email, or invalid payment method",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Product": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "prod_001"
+          },
+          "name": {
+            "type": "string",
+            "example": "GPT-4o Vision Analyzer"
+          },
+          "description": {
+            "type": "string",
+            "example": "Multimodal AI agent for image and document analysis."
+          },
+          "price": {
+            "type": "number",
+            "description": "Monthly price in USD",
+            "example": 49.99
+          },
+          "category": {
+            "type": "string",
+            "enum": ["vision", "nlp", "extraction", "code", "sales", "classification", "analytics", "generation", "apis", "data"],
+            "example": "vision"
+          },
+          "task": {
+            "type": "string",
+            "example": "image_analysis"
+          },
+          "latency_ms": {
+            "type": "integer",
+            "description": "Response latency in milliseconds",
+            "example": 800
+          },
+          "accuracy": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "example": 0.95
+          },
+          "update_frequency": {
+            "type": "string",
+            "enum": ["realtime", "daily", "weekly", "monthly"],
+            "example": "weekly"
+          },
+          "format": {
+            "type": "string",
+            "enum": ["json", "text", "markdown"],
+            "example": "json"
+          },
+          "region": {
+            "type": "string",
+            "enum": ["us", "eu", "de", "global"],
+            "example": "us"
+          },
+          "compatible_with": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": ["openai", "langchain", "n8n"]
+          },
+          "rating": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 5,
+            "example": 4.8
+          },
+          "reviews": {
+            "type": "integer",
+            "example": 312
+          }
+        },
+        "required": ["id", "name", "price", "category"]
+      },
+      "CartItem": {
+        "type": "object",
+        "properties": {
+          "product_id": {
+            "type": "string",
+            "example": "destatis-ecommerce-index"
+          },
+          "name": {
+            "type": "string",
+            "example": "German E-Commerce Revenue Index"
+          },
+          "price": {
+            "type": "number",
+            "example": 9.99
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 1,
+            "example": 1
+          }
+        },
+        "required": ["product_id", "name", "price", "quantity"]
+      },
+      "ProductListResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "count": {
+            "type": "integer",
+            "example": 14
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Product"
+            }
+          }
+        },
+        "required": ["success", "count", "data"]
+      },
+      "ProductDetailResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/Product"
+          },
+          "data_preview": {
+            "description": "Live data preview for Destatis products (last 6 observations per series). Null if unavailable.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LiveData"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["success", "data"]
+      },
+      "CartAddRequest": {
+        "type": "object",
+        "properties": {
+          "product_id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+            "example": "destatis-ecommerce-index"
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 1,
+            "example": 1
+          }
+        },
+        "required": ["product_id"]
+      },
+      "CartAddResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "message": {
+            "type": "string",
+            "example": "Product added to cart."
+          },
+          "cart": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CartItem"
+            }
+          }
+        },
+        "required": ["success", "message", "cart"]
+      },
+      "CartResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CartItem"
+            }
+          },
+          "item_count": {
+            "type": "integer",
+            "example": 1
+          },
+          "total": {
+            "type": "number",
+            "description": "Total price in USD, rounded to 2 decimal places",
+            "example": 9.99
+          }
+        },
+        "required": ["success", "items", "item_count", "total"]
+      },
+      "CheckoutRequest": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 320,
+            "example": "agent@example.com"
+          },
+          "payment_method": {
+            "type": "string",
+            "enum": ["card", "paypal", "crypto"],
+            "default": "card",
+            "example": "card"
+          }
+        },
+        "required": ["email"]
+      },
+      "Order": {
+        "type": "object",
+        "properties": {
+          "order_id": {
+            "type": "string",
+            "example": "ord_1775036780573"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "agent@example.com"
+          },
+          "payment_method": {
+            "type": "string",
+            "enum": ["card", "paypal", "crypto"],
+            "example": "card"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CartItem"
+            }
+          },
+          "total": {
+            "type": "number",
+            "example": 9.99
+          },
+          "status": {
+            "type": "string",
+            "example": "confirmed"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-04-01T09:46:20.573Z"
+          }
+        },
+        "required": ["order_id", "email", "payment_method", "items", "total", "status", "created_at"]
+      },
+      "LiveDataObservation": {
+        "type": "object",
+        "properties": {
+          "period": {
+            "type": "string",
+            "description": "Month in YYYY-MM format",
+            "example": "2025-12"
+          },
+          "value": {
+            "type": ["number", "null"],
+            "example": 243.7
+          }
+        },
+        "required": ["period", "value"]
+      },
+      "LiveDataSeries": {
+        "type": "object",
+        "properties": {
+          "series_code": {
+            "type": "string",
+            "example": "DG.WZ08-4791.NOMINAL.UMS002"
+          },
+          "series_name": {
+            "type": "string",
+            "example": "Germany – Retail sale via mail order houses or via Internet – at current prices – Turnover"
+          },
+          "unit": {
+            "type": "string",
+            "example": "Index (2015 = 100)"
+          },
+          "observations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LiveDataObservation"
+            }
+          }
+        },
+        "required": ["series_code", "series_name", "unit", "observations"]
+      },
+      "LiveData": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "example": "© Statistisches Bundesamt (Destatis), Datenlizenz Deutschland 2.0"
+          },
+          "dataset": {
+            "type": "string",
+            "example": "45212BM002"
+          },
+          "retrieved_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-04-01T09:46:20.572Z"
+          },
+          "series": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LiveDataSeries"
+            }
+          }
+        },
+        "required": ["source", "dataset", "retrieved_at", "series"]
+      },
+      "CheckoutResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "message": {
+            "type": "string",
+            "example": "Order placed successfully."
+          },
+          "order": {
+            "$ref": "#/components/schemas/Order"
+          },
+          "live_data": {
+            "description": "Full live datasets delivered for purchased Destatis products. Only present if the order contains live-data products.",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "product_id": {
+                  "type": "string",
+                  "example": "destatis-ecommerce-index"
+                },
+                "data": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/LiveData"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "error": {
+                  "type": "string",
+                  "description": "Present if live data fetch failed",
+                  "example": "Live data temporarily unavailable."
+                }
+              }
+            }
+          }
+        },
+        "required": ["success", "message", "order"]
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": false
+          },
+          "error": {
+            "type": "string",
+            "example": "Product not found."
+          }
+        },
+        "required": ["success", "error"]
+      }
+    }
+  }
+}
