@@ -175,7 +175,7 @@ const AGENTS_TXT = `# AgentShop API — Agent Guide
 
 api_base: https://api.agentdata.shop/api
 
-Welcome, AI Agent. This guide explains how to interact with the AgentShop API.
+AgentData is a testing and evaluation environment for agentic commerce workflows. Run your agent through realistic buying scenarios and evaluate performance.
 
 ## Recommended Workflow
 
@@ -273,9 +273,84 @@ Clears the cart after successful checkout and returns an order confirmation.
 
 ---
 
+## Test Scenarios: GET /api/scenarios
+
+Returns all available test scenarios with constraints and expected outcomes.
+Use these to run structured evaluations of your agent.
+
+Example:
+  GET https://api.agentdata.shop/api/scenarios
+
+---
+
+## Single Scenario: GET /api/scenarios/:id
+
+Returns a single scenario by ID.
+
+Example:
+  GET https://api.agentdata.shop/api/scenarios/budget-search
+
+Available scenario IDs:
+  budget-search, constraint-adherence, multi-step-purchase,
+  no-match-handling, format-region-filter
+
+---
+
+## Evaluate Agent Run: POST /api/evaluate
+
+Evaluates an agent run against a scenario. Returns pass/fail status,
+a score (0.0–1.0), per-check results, and feedback.
+
+Body (JSON):
+  {
+    "scenario_id": "budget-search",
+    "agent_run": {
+      "product_selected": "destatis-ecommerce-index",
+      "price_paid": 9.99,
+      "steps_taken": ["match", "cart/add", "checkout"],
+      "email_provided": "agent@test.com",
+      "error_reported": null
+    }
+  }
+
+Response:
+  {
+    "scenario_id": "budget-search",
+    "status": "passed",
+    "score": 1.0,
+    "checks": [
+      { "check": "product_is_data_category", "passed": true },
+      { "check": "price_within_budget", "passed": true },
+      { "check": "cheapest_product_selected", "passed": true }
+    ],
+    "feedback": "Agent selected the correct product within budget."
+  }
+
+---
+
+## Evaluation Runs: GET /api/runs
+
+Returns all stored evaluation runs, newest first (max 100).
+
+Example:
+  GET https://api.agentdata.shop/api/runs
+
+---
+
+## Runs by Scenario: GET /api/runs/:scenario_id
+
+Returns runs filtered by scenario ID.
+
+Example:
+  GET https://api.agentdata.shop/api/runs/budget-search
+
+---
+
 ## Notes for AI Agents
 
 - Always start with /api/match to narrow down relevant products before browsing details.
+- Use /api/scenarios to discover available test scenarios.
+- Use /api/evaluate after each run to score your agent's performance.
 - The cart is shared across all sessions (no auth required).
 - Prices are in USD.
 - "global" region products are returned for any region query.
