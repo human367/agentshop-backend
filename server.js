@@ -550,6 +550,95 @@ app.get('/api/scenarios/:id', (req, res) => {
   res.json({ success: true, data: scenario });
 });
 
+// ── Evaluate ──────────────────────────────────────────────────────────────────
+
+app.post('/api/evaluate', (req, res) => {
+  const { scenario_id, agent_run } = req.body || {};
+
+  if (!scenario_id || typeof scenario_id !== 'string') {
+    return res.status(400).json({ success: false, error: 'scenario_id is required.' });
+  }
+  if (!agent_run || typeof agent_run !== 'object') {
+    return res.status(400).json({ success: false, error: 'agent_run is required.' });
+  }
+
+  const scenario = scenarios.find(s => s.id === scenario_id);
+  if (!scenario) {
+    return res.status(404).json({ success: false, error: 'Scenario not found.' });
+  }
+
+  const products = loadProducts();
+  const product = products.find(p => p.id === agent_run.product_selected);
+  const steps = Array.isArray(agent_run.steps_taken) ? agent_run.steps_taken : [];
+  const pricePaid = typeof agent_run.price_paid === 'number' ? agent_run.price_paid : null;
+
+  let checks = [];
+
+  if (scenario_id === 'budget-search') {
+    const isDataCategory = product?.category === 'data';
+    const withinBudget = pricePaid !== null && pricePaid <= 15;
+    const dataProducts = products.filter(p => p.category === 'data' && p.price <= 15);
+    const cheapest = dataProducts.reduce((a, b) => (a.price <= b.price ? a : b), dataProducts[0]);
+    const isCheapest = cheapest && product?.id === cheapest.id;
+
+    checks = [
+      { check: 'product_is_data_category', passed: isDataCategory },
+      { check: 'price_within_budget',      passed: withinBudget },
+      { check: 'cheapest_product_selected', passed: !!isCheapest },
+    ];
+
+  } else if (scenario_id === 'constraint-adherence') {
+    const meetsAccuracy = product?.accuracy != null && product.accuracy >= 0.95;
+    const withinBudget  = pricePaid !== null && pricePaid <= 30;
+
+    checks = [
+      { check: 'min_accuracy_met',    passed: meetsAccuracy },
+      { check: 'price_within_budget', passed: withinBudget },
+    ];
+
+  } else if (scenario_id === 'multi-step-purchase') {
+    const requiredSteps = ['match', 'cart/add', 'checkout'];
+    const hasAllSteps   = requiredSteps.every(s => steps.includes(s));
+    const withinBudget  = pricePaid !== null && pricePaid <= 25;
+    const hasEmail      = agent_run.email_provided != null && agent_run.email_provided !== '';
+
+    checks = [
+      { check: 'all_steps_executed',  passed: hasAllSteps },
+      { check: 'price_within_budget', passed: withinBudget },
+      { check: 'email_provided',      passed: hasEmail },
+    ];
+
+  } else if (scenario_id === 'no-match-handling') {
+    const reportedError   = agent_run.error_reported != null;
+    const didNotProceed   = !steps.includes('cart/add') && !steps.includes('checkout');
+
+    checks = [
+      { check: 'error_reported',          passed: reportedError },
+      { check: 'did_not_proceed_to_cart', passed: didNotProceed },
+    ];
+
+  } else if (scenario_id === 'format-region-filter') {
+    const hasJsonFormat = product?.format === 'json';
+    const hasEuRegion   = product?.region === 'eu';
+
+    checks = [
+      { check: 'product_format_json', passed: hasJsonFormat },
+      { check: 'product_region_eu',   passed: hasEuRegion },
+    ];
+  }
+
+  const passedCount = checks.filter(c => c.passed).length;
+  const score       = checks.length > 0 ? Math.round((passedCount / checks.length) * 100) / 100 : 0;
+  const status      = score === 1.0 ? 'passed' : 'failed';
+
+  const failedChecks = checks.filter(c => !c.passed).map(c => c.check);
+  const feedback = status === 'passed'
+    ? scenario.expected_outcome
+    : `Failed checks: ${failedChecks.join(', ')}.`;
+
+  res.json({ scenario_id, status, score, checks, feedback });
+});
+
 // ── Start ─────────────────────────────────────────────────────────────────────
 
 app.listen(PORT, () => {
