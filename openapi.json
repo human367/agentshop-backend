@@ -352,6 +352,198 @@
         }
       }
     },
+    "/api/scenarios": {
+      "get": {
+        "summary": "List all test scenarios",
+        "description": "Returns all available test scenarios with constraints and expected outcomes.",
+        "operationId": "listScenarios",
+        "responses": {
+          "200": {
+            "description": "List of scenarios",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "count": { "type": "integer", "example": 5 },
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Scenario" }
+                    }
+                  },
+                  "required": ["success", "count", "data"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/scenarios/{id}": {
+      "get": {
+        "summary": "Get a single scenario",
+        "description": "Returns a single test scenario by ID.",
+        "operationId": "getScenario",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Scenario ID",
+            "schema": {
+              "type": "string",
+              "example": "budget-search",
+              "enum": ["budget-search", "constraint-adherence", "multi-step-purchase", "no-match-handling", "format-region-filter"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Scenario detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "data": { "$ref": "#/components/schemas/Scenario" }
+                  },
+                  "required": ["success", "data"]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Scenario not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/evaluate": {
+      "post": {
+        "summary": "Evaluate an agent run",
+        "description": "Evaluates an agent run against a defined scenario and returns a pass/fail score with per-check results and feedback.",
+        "operationId": "evaluateRun",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/EvaluateRequest" },
+              "example": {
+                "scenario_id": "budget-search",
+                "agent_run": {
+                  "product_selected": "destatis-ecommerce-index",
+                  "price_paid": 9.99,
+                  "steps_taken": ["match", "cart/add", "checkout"],
+                  "email_provided": "agent@test.com",
+                  "error_reported": null
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Evaluation result",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EvaluationResult" }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or invalid request fields",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "Scenario not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/runs": {
+      "get": {
+        "summary": "Get all evaluation runs",
+        "description": "Returns all stored evaluation runs, newest first. Maximum 100 entries.",
+        "operationId": "listRuns",
+        "responses": {
+          "200": {
+            "description": "List of runs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "count": { "type": "integer", "example": 3 },
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/RunEntry" }
+                    }
+                  },
+                  "required": ["success", "count", "data"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/runs/{scenario_id}": {
+      "get": {
+        "summary": "Get runs by scenario",
+        "description": "Returns all stored evaluation runs filtered by scenario ID, newest first.",
+        "operationId": "getRunsByScenario",
+        "parameters": [
+          {
+            "name": "scenario_id",
+            "in": "path",
+            "required": true,
+            "description": "Scenario ID to filter by",
+            "schema": {
+              "type": "string",
+              "example": "budget-search"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Filtered list of runs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "count": { "type": "integer", "example": 1 },
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/RunEntry" }
+                    }
+                  },
+                  "required": ["success", "count", "data"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/checkout": {
       "post": {
         "summary": "Checkout",
@@ -768,6 +960,88 @@
           }
         },
         "required": ["success", "message", "order"]
+      },
+      "Scenario": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "example": "budget-search" },
+          "name": { "type": "string", "example": "Budget Search" },
+          "task": { "type": "string", "example": "Find the cheapest data product under budget" },
+          "constraints": {
+            "type": "object",
+            "description": "Scenario-specific constraints the agent must satisfy",
+            "example": { "category": "data", "max_price": 15 }
+          },
+          "expected_outcome": { "type": "string", "example": "Agent selects the cheapest product that matches both constraints" },
+          "failure_mode": { "type": "string", "example": "simple_selection" }
+        },
+        "required": ["id", "name", "task", "constraints", "expected_outcome", "failure_mode"]
+      },
+      "AgentRun": {
+        "type": "object",
+        "properties": {
+          "product_selected": { "type": "string", "example": "destatis-ecommerce-index" },
+          "price_paid": { "type": "number", "example": 9.99 },
+          "steps_taken": {
+            "type": "array",
+            "items": { "type": "string" },
+            "example": ["match", "cart/add", "checkout"]
+          },
+          "email_provided": {
+            "type": ["string", "null"],
+            "example": "agent@test.com"
+          },
+          "error_reported": {
+            "type": ["string", "null"],
+            "example": null
+          }
+        }
+      },
+      "EvaluateRequest": {
+        "type": "object",
+        "properties": {
+          "scenario_id": { "type": "string", "example": "budget-search" },
+          "agent_run": { "$ref": "#/components/schemas/AgentRun" }
+        },
+        "required": ["scenario_id", "agent_run"]
+      },
+      "EvaluationCheck": {
+        "type": "object",
+        "properties": {
+          "check": { "type": "string", "example": "price_within_budget" },
+          "passed": { "type": "boolean", "example": true }
+        },
+        "required": ["check", "passed"]
+      },
+      "EvaluationResult": {
+        "type": "object",
+        "properties": {
+          "scenario_id": { "type": "string", "example": "budget-search" },
+          "status": { "type": "string", "enum": ["passed", "failed"], "example": "passed" },
+          "score": { "type": "number", "minimum": 0, "maximum": 1, "example": 1.0 },
+          "checks": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/EvaluationCheck" }
+          },
+          "feedback": { "type": "string", "example": "Agent selected the correct product within budget." }
+        },
+        "required": ["scenario_id", "status", "score", "checks", "feedback"]
+      },
+      "RunEntry": {
+        "type": "object",
+        "properties": {
+          "run_id": { "type": "string", "example": "run_1743504000000" },
+          "timestamp": { "type": "string", "format": "date-time", "example": "2026-04-01T12:00:00.000Z" },
+          "scenario_id": { "type": "string", "example": "budget-search" },
+          "status": { "type": "string", "enum": ["passed", "failed"], "example": "passed" },
+          "score": { "type": "number", "minimum": 0, "maximum": 1, "example": 1.0 },
+          "agent_run": { "$ref": "#/components/schemas/AgentRun" },
+          "checks": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/EvaluationCheck" }
+          }
+        },
+        "required": ["run_id", "timestamp", "scenario_id", "status", "score", "agent_run", "checks"]
       },
       "ErrorResponse": {
         "type": "object",
