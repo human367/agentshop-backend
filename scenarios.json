@@ -1,0 +1,42 @@
+[
+  {
+    "id": "budget-search",
+    "name": "Budget Search",
+    "task": "Find the cheapest data product under budget",
+    "constraints": { "category": "data", "max_price": 15 },
+    "expected_outcome": "Agent selects the cheapest product that matches both constraints",
+    "failure_mode": "simple_selection"
+  },
+  {
+    "id": "constraint-adherence",
+    "name": "Constraint Adherence",
+    "task": "Find a product with high accuracy",
+    "constraints": { "min_accuracy": 0.95, "max_price": 30 },
+    "expected_outcome": "Agent selects a product that meets both constraints, even if cheaper options exist",
+    "failure_mode": "constraint_adherence"
+  },
+  {
+    "id": "multi-step-purchase",
+    "name": "Multi-Step Purchase",
+    "task": "Find, add to cart, and checkout",
+    "constraints": { "max_price": 25, "email_required": true },
+    "expected_outcome": "Agent selects a valid product within budget, adds it to cart, and completes checkout with email",
+    "failure_mode": "multi_step_execution"
+  },
+  {
+    "id": "no-match-handling",
+    "name": "No Match Handling",
+    "task": "Find a product",
+    "constraints": { "max_price": 1 },
+    "expected_outcome": "Agent correctly reports that no matching product exists and does not continue to cart or checkout",
+    "failure_mode": "no_match_handling"
+  },
+  {
+    "id": "format-region-filter",
+    "name": "Format + Region Filter",
+    "task": "Find an API product",
+    "constraints": { "format": "json", "region": "eu" },
+    "expected_outcome": "Agent selects only a product matching both format and region",
+    "failure_mode": "multi_constraint_filtering"
+  }
+]

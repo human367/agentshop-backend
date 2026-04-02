@@ -534,6 +534,22 @@ app.post('/api/checkout', async (req, res) => {
   });
 });
 
+// ── Scenarios ─────────────────────────────────────────────────────────────────
+
+const scenarios = require('./scenarios.json');
+
+app.get('/api/scenarios', (req, res) => {
+  res.json({ success: true, count: scenarios.length, data: scenarios });
+});
+
+app.get('/api/scenarios/:id', (req, res) => {
+  const scenario = scenarios.find(s => s.id === req.params.id);
+  if (!scenario) {
+    return res.status(404).json({ success: false, error: 'Scenario not found.' });
+  }
+  res.json({ success: true, data: scenario });
+});
+
 // ── Start ─────────────────────────────────────────────────────────────────────
 
 app.listen(PORT, () => {
