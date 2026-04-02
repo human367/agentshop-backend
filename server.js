@@ -650,7 +650,18 @@ app.get('/api/scenarios/:id', (req, res) => {
 
 // ── Evaluate ──────────────────────────────────────────────────────────────────
 
-app.post('/api/evaluate', (req, res) => {
+const evaluateMonthlyLimit = rateLimit({
+  windowMs: 30 * 24 * 60 * 60 * 1000, // 30 days
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: 'Free plan limit reached. Upgrade to Starter for unlimited calls. https://agentdata.shop/#pricing',
+  },
+});
+
+app.post('/api/evaluate', evaluateMonthlyLimit, (req, res) => {
   const { scenario_id, agent_run } = req.body || {};
 
   if (!scenario_id || typeof scenario_id !== 'string') {
