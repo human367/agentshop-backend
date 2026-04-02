@@ -538,6 +538,29 @@ app.post('/api/checkout', async (req, res) => {
 
 const scenarios = require('./scenarios.json');
 
+// ── Run Logs ──────────────────────────────────────────────────────────────────
+
+const RUNS_FILE = path.join(__dirname, 'runs.json');
+
+function loadRuns() {
+  try {
+    return JSON.parse(fs.readFileSync(RUNS_FILE, 'utf-8'));
+  } catch (_) {
+    return [];
+  }
+}
+
+function saveRun(entry) {
+  const runs = loadRuns();
+  runs.unshift(entry);           // newest first
+  const trimmed = runs.slice(0, 100);
+  try {
+    fs.writeFileSync(RUNS_FILE, JSON.stringify(trimmed, null, 2));
+  } catch (e) {
+    console.error('Failed to write runs.json:', e.message);
+  }
+}
+
 app.get('/api/scenarios', (req, res) => {
   res.json({ success: true, count: scenarios.length, data: scenarios });
 });
@@ -636,7 +659,28 @@ app.post('/api/evaluate', (req, res) => {
     ? scenario.expected_outcome
     : `Failed checks: ${failedChecks.join(', ')}.`;
 
+  const runEntry = {
+    run_id:      `run_${Date.now()}`,
+    timestamp:   new Date().toISOString(),
+    scenario_id,
+    status,
+    score,
+    agent_run,
+    checks,
+  };
+  saveRun(runEntry);
+
   res.json({ scenario_id, status, score, checks, feedback });
+});
+
+app.get('/api/runs', (req, res) => {
+  const runs = loadRuns();
+  res.json({ success: true, count: runs.length, data: runs });
+});
+
+app.get('/api/runs/:scenario_id', (req, res) => {
+  const runs = loadRuns().filter(r => r.scenario_id === req.params.scenario_id);
+  res.json({ success: true, count: runs.length, data: runs });
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────
